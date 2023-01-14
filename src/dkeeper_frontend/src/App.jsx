@@ -12,13 +12,31 @@ import KeeperNote, {CreateNote} from './keeper/keeper'
 // import Counter from "./util/counter";
 import ErrorBoundary from "./util/errorBoundary";
 import './App.css';
-import React, {useState} from "react";
+import React, {useEffect, useState} from "react";
+import { dkeeper_backend } from '../../declarations/dkeeper_backend/index';
 
 //var counter = new Counter(new Date().getHours());
 //counter.startCounter().stopCounter(10000);
 let defaultNotes = [{id: 20, title: "", content: ""}];
 export default function App() {
     const [notes, setNotes] = useState([]);
+
+    /**
+     * Initialise on render, taking the notes from the BC network.
+     * We specify an empty array as the second parameter to prevent endless loop of useEffect -> setNotes -> re-render -> useEffect
+     * The empty array ensures that useEffect only executes once.
+     */
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    /**
+     * Fetch the notes from the BC network.
+     */
+    async function fetchData() {
+        const notesArray = await dkeeper_backend.readNotes();
+        setNotes(notesArray);
+    }
 
     /**
      *
@@ -29,7 +47,10 @@ export default function App() {
     function addNote(note, noteID, callback) {
         // console.log(note);
         note.id = noteID;
-        setNotes(prevState => [...prevState, note]);
+        setNotes(prevState => {
+            dkeeper_backend.createNote(note.title, note.content);
+            return [note, ...prevState]
+        });
 
         if (typeof callback === "function") {
             callback();
@@ -40,6 +61,7 @@ export default function App() {
      * @param {number} noteID
      */
     function deleteNote(noteID) {
+        dkeeper_backend.removeNote(noteID);
         setNotes(prevState => prevState.filter((noteItem) => {
             return noteItem.id !== noteID;
         }));
@@ -47,11 +69,14 @@ export default function App() {
 
     /**
      * @param {object} note
+     * @param {number} index
      */
-    function parseNote(note) {
+    function parseNote(note, index) {
         if (note === undefined) {
             return;
         }
+
+        note.id = index;
 
         return (
             <KeeperNote key={note.id} id={note.id} title={note.title} content={note.content} onDelete={deleteNote} />
